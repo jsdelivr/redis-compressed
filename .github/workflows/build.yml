@@ -1,0 +1,79 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  linux-build:
+    name: Build Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs_on }}
+    container:
+      image: rockylinux:8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runs_on: ubuntu-24.04
+            artifact_name: redis-compressed-linux-x64
+            module_name: redis-compressed-linux-x64.so
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            artifact_name: redis-compressed-linux-arm64
+            module_name: redis-compressed-linux-arm64.so
+
+    steps:
+      - name: Install build dependencies
+        run: dnf install -y git cmake gcc make tar gzip
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: make release
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          cp build/release/libredis-compressed.so dist/${{ matrix.module_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.module_name }}
+          if-no-files-found: error
+
+  linux-test:
+    name: Test Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs_on }}
+    needs: linux-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runs_on: ubuntu-24.04
+            artifact_name: redis-compressed-linux-x64
+            module_name: redis-compressed-linux-x64.so
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            artifact_name: redis-compressed-linux-arm64
+            module_name: redis-compressed-linux-arm64.so
+
+    steps:
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y tar nodejs
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download built module
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build/release
+
+      - name: Run integration tests
+        run: REDIS_COMPRESSED_MODULE="$PWD/build/release/${{ matrix.module_name }}" node --test test/tests/integration.js
