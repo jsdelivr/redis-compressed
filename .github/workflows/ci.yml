@@ -28,7 +28,7 @@ jobs:
         run: dnf install -y git cmake gcc make tar gzip
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build
         run: make release
@@ -39,7 +39,7 @@ jobs:
           cp build/release/libredis-compressed.so dist/${{ matrix.module_name }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: dist/${{ matrix.module_name }}
@@ -67,10 +67,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tar nodejs
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download built module
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact_name }}
           path: build/release
