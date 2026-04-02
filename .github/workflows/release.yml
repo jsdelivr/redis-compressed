@@ -20,6 +20,11 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Download release assets
         uses: actions/download-artifact@v8
         with:
@@ -31,7 +36,17 @@ jobs:
           cp release-assets/redis-compressed-linux-amd64/libredis-compressed.so release-assets/redis-compressed-linux-amd64.so
           cp release-assets/redis-compressed-linux-arm64/libredis-compressed.so release-assets/redis-compressed-linux-arm64.so
 
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest
+          version: v2.12.0
+        env:
+          OUTPUT: RELEASE_NOTES.md
+          GITHUB_REPO: ${{ github.repository }}
+
       - name: Create GitHub release and upload assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" release-assets/*.so --generate-notes --title "${{ github.ref_name }}"
+        run: gh release create "${{ github.ref_name }}" release-assets/*.so --notes-file RELEASE_NOTES.md --title "${{ github.ref_name }}"
