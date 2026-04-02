@@ -75,6 +75,38 @@ function decodeCompressedJsonReply (reply) {
 	assert.fail(`unexpected reply prefix: 0x${prefix.toString(16).padStart(2, '0')}`);
 }
 
+function assertTransportPrefix (reply, expectedPrefix) {
+	assert.equal(
+		reply[0].toString(16).padStart(2, '0'),
+		expectedPrefix,
+		'reply prefix should match the expected transport mode',
+	);
+}
+
+function assertJsonGetMatchesCompressedJsonGetAsString (args, expectedPrefix) {
+	const rawGet = cliBuffer([ 'JSON.GET', ...args ]);
+	const compressedGet = cliBuffer([ 'COMPRESSED.JSON.GET', ...args ]);
+
+	assertTransportPrefix(compressedGet, expectedPrefix);
+
+	assert.equal(
+		decodeCompressedJsonReply(compressedGet),
+		rawGet.toString('utf8'),
+	);
+}
+
+function assertJsonGetMatchesCompressedJsonGetAsObject (args, expectedPrefix) {
+	const rawGet = cliBuffer([ 'JSON.GET', ...args ]);
+	const compressedGet = cliBuffer([ 'COMPRESSED.JSON.GET', ...args ]);
+
+	assertTransportPrefix(compressedGet, expectedPrefix);
+
+	assert.deepEqual(
+		JSON.parse(decodeCompressedJsonReply(compressedGet)),
+		JSON.parse(rawGet.toString('utf8')),
+	);
+}
+
 test('wrong arity is reported', () => {
 	const result = cli([ 'COMPRESSED.JSON.GET' ]);
 
@@ -145,4 +177,94 @@ test('large JSON replies are returned compressed with a 0x01 prefix', () => {
 	const largeReplyBytes = compressedGet.length - 1;
 
 	assert.ok(largeReplyBytes < largeJsonBytes, `compressed payload should be smaller than the original JSON\njson-bytes: ${largeJsonBytes}\nbrotli-bytes: ${largeReplyBytes}`);
+});
+
+test('JSON.GET formatting options are forwarded unchanged', () => {
+	assert.equal(
+		cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+		'OK',
+	);
+
+	assert.equal(
+		cliChecked([ 'JSON.SET', 'formatted-doc', '$', '{"outer":{"message":"hello","value":1}}' ]).stdout.trim(),
+		'OK',
+	);
+
+	const args = [
+		'formatted-doc',
+		'INDENT', '  ',
+		'NEWLINE', '\n',
+		'SPACE', ' ',
+	];
+
+	assertJsonGetMatchesCompressedJsonGetAsString(args, '00');
+});
+
+test('JSON.GET formatting options are forwarded unchanged for compressed replies', () => {
+	assert.equal(
+		cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+		'OK',
+	);
+
+	assert.equal(
+		cliChecked([ 'JSON.SET', 'formatted-large-doc', '$', '{"outer":{"message":"' + 'x'.repeat(2048) + '","value":1}}' ]).stdout.trim(),
+		'OK',
+	);
+
+	const args = [
+		'formatted-large-doc',
+		'INDENT', '  ',
+		'NEWLINE', '\n',
+		'SPACE', ' ',
+	];
+
+	assertJsonGetMatchesCompressedJsonGetAsString(args, '01');
+});
+
+test('JSON.GET path arguments are forwarded unchanged', () => {
+	assert.equal(
+		cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+		'OK',
+	);
+
+	assert.equal(
+		cliChecked([ 'JSON.SET', 'path-doc', '$', '{"outer":{"first":1,"second":2},"items":[{"id":1},{"id":2}]}' ]).stdout.trim(),
+		'OK',
+	);
+
+	const singlePathArgs = [ 'path-doc', '$.outer.first' ];
+	assertJsonGetMatchesCompressedJsonGetAsObject(singlePathArgs, '00');
+
+	const multiPathArgs = [ 'path-doc', '$.outer.first', '$.items[*].id' ];
+	assertJsonGetMatchesCompressedJsonGetAsObject(multiPathArgs, '00');
+});
+
+test('JSON.GET path arguments are forwarded unchanged for compressed replies', () => {
+	assert.equal(
+		cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+		'OK',
+	);
+
+	const largePayload = 'x'.repeat(2048);
+	const pathDoc = JSON.stringify({
+		outer: {
+			first: largePayload,
+			second: largePayload,
+		},
+		items: [
+			{ id: largePayload },
+			{ id: largePayload },
+		],
+	});
+
+	assert.equal(
+		cliChecked([ 'JSON.SET', 'path-large-doc', '$', pathDoc ]).stdout.trim(),
+		'OK',
+	);
+
+	const singlePathArgs = [ 'path-large-doc', '$.outer.first' ];
+	assertJsonGetMatchesCompressedJsonGetAsObject(singlePathArgs, '01');
+
+	const multiPathArgs = [ 'path-large-doc', '$.outer.first', '$.items[*].id' ];
+	assertJsonGetMatchesCompressedJsonGetAsObject(multiPathArgs, '01');
 });
