@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  linux-build:
+    uses: ./.github/workflows/build.yml
+
+  publish-release:
+    name: Publish Release
+    runs-on: ubuntu-24.04
+    needs: linux-build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          pattern: redis-compressed-linux-*
+
+      - name: Prepare release asset names
+        run: |
+          cp release-assets/redis-compressed-linux-amd64/libredis-compressed.so release-assets/redis-compressed-linux-amd64.so
+          cp release-assets/redis-compressed-linux-arm64/libredis-compressed.so release-assets/redis-compressed-linux-arm64.so
+
+      - name: Create GitHub release and upload assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" release-assets/*.so --generate-notes --title "${{ github.ref_name }}"

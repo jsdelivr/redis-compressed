@@ -7,37 +7,7 @@ on:
 
 jobs:
   linux-build:
-    name: Build Linux ${{ matrix.arch }}
-    runs-on: ${{ matrix.runs_on }}
-    container:
-      image: rockylinux:8
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runs_on: ubuntu-24.04
-            artifact_name: redis-compressed-linux-amd64
-          - arch: arm64
-            runs_on: ubuntu-24.04-arm
-            artifact_name: redis-compressed-linux-arm64
-
-    steps:
-      - name: Install build dependencies
-        run: dnf install -y git cmake gcc make tar gzip
-
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Build
-        run: make release
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: build/release/libredis-compressed.so
-          if-no-files-found: error
+    uses: ./.github/workflows/build.yml
 
   linux-test:
     name: Test Linux ${{ matrix.arch }}
