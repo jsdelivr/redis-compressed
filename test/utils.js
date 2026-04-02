@@ -96,7 +96,6 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		dockerChecked([
 			'run',
 			'-d',
-			'--rm',
 			'--name',
 			containerName,
 			'-v',
