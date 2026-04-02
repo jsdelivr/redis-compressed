@@ -14,9 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
+          - arch: amd64
             runs_on: ubuntu-24.04
-            artifact_name: redis-compressed-linux-x64
+            artifact_name: redis-compressed-linux-amd64
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             artifact_name: redis-compressed-linux-arm64
@@ -46,9 +46,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
+          - arch: amd64
             runs_on: ubuntu-24.04
-            artifact_name: redis-compressed-linux-x64
+            artifact_name: redis-compressed-linux-amd64
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             artifact_name: redis-compressed-linux-arm64
