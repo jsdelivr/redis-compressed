@@ -1,12 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
 
-const DEFAULT_SPAWN_TIMEOUT_MS = 10_000;
-
 export function dockerExists (options = {}) {
 	const result = spawnSync('docker', [ '--version' ], {
 		stdio: 'ignore',
-		timeout: DEFAULT_SPAWN_TIMEOUT_MS,
 		...options,
 	});
 
@@ -16,7 +13,6 @@ export function dockerExists (options = {}) {
 export function run (command, args, options = {}) {
 	const result = spawnSync(command, args, {
 		encoding: 'utf8',
-		timeout: DEFAULT_SPAWN_TIMEOUT_MS,
 		...options,
 	});
 
