@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  linux-build:
-    uses: ./.github/workflows/build.yml
+  build-and-test:
+    uses: ./.github/workflows/build-and-test.yml
 
   publish-release:
     name: Publish Release
     runs-on: ubuntu-24.04
-    needs: linux-build
+    needs: build-and-test
     permissions:
       contents: write
 
