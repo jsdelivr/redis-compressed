@@ -1,13 +1,22 @@
 import { spawnSync } from 'node:child_process';
+import { setTimeout } from 'node:timers/promises';
 
-export function commandExists (command) {
-	const result = spawnSync(command, [ '--version' ], { stdio: 'ignore' });
+const DEFAULT_SPAWN_TIMEOUT_MS = 10_000;
+
+export function dockerExists (options = {}) {
+	const result = spawnSync('docker', [ '--version' ], {
+		stdio: 'ignore',
+		timeout: DEFAULT_SPAWN_TIMEOUT_MS,
+		...options,
+	});
+
 	return !result.error;
 }
 
 export function run (command, args, options = {}) {
 	const result = spawnSync(command, args, {
 		encoding: 'utf8',
+		timeout: DEFAULT_SPAWN_TIMEOUT_MS,
 		...options,
 	});
 
@@ -20,11 +29,13 @@ export function run (command, args, options = {}) {
 
 export function runChecked (command, args, options = {}) {
 	const result = run(command, args, options);
+
 	if (result.status !== 0) {
 		const stderr = toTrimmedString(result.stderr);
 		const stdout = toTrimmedString(result.stdout);
 		throw new Error(stderr || stdout || `${command} exited with status ${result.status}`);
 	}
+
 	return result;
 }
 
@@ -38,10 +49,6 @@ export function toTrimmedString (value) {
 	}
 
 	return String(value).trim();
-}
-
-export function sleep (ms) {
-	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 export function createRedisStackHarness ({ containerName, redisStackImage, moduleDir, moduleFile }) {
@@ -92,7 +99,13 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		return `${logs.stdout || ''}${logs.stderr || ''}`.trim();
 	}
 
-	function startContainer () {
+	async function startContainer () {
+		try {
+			dockerChecked([ 'rm', '-f', containerName ], { stdio: 'ignore' });
+		} catch {
+			// Ignore stale-container cleanup failures and let docker run report real startup errors.
+		}
+
 		dockerChecked([
 			'run',
 			'-d',
@@ -113,21 +126,24 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 
 		for (let i = 0; i < 30; i += 1) {
 			const state = getContainerState();
+
 			if (state === 'exited' || state === 'dead') {
 				const logs = getContainerLogs();
 				throw new Error(`redis stack container exited during startup${logs ? `\n${logs}` : ''}`);
 			}
 
 			const ping = docker([ 'exec', containerName, 'redis-cli', 'ping' ]);
+
 			if (ping.status === 0 && ping.stdout.trim() === 'PONG') {
 				return;
 			}
 
-			sleep(1000);
+			await setTimeout(1000);
 		}
 
 		const state = getContainerState();
 		const logs = getContainerLogs();
+
 		throw new Error(`redis stack container did not become ready (state: ${state ?? 'missing'})${logs ? `\n${logs}` : ''}`);
 	}
 
@@ -137,14 +153,17 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		}
 
 		const inspect = docker([ 'ps', '-a', '--format', '{{.Names}}' ]);
+
 		if (inspect.status === 0) {
 			const names = inspect.stdout.trim().split('\n').filter(Boolean);
+
 			if (names.includes(containerName)) {
 				if (exitCode !== 0) {
 					const logs = docker([ 'logs', containerName ]);
 					process.stderr.write(logs.stdout || '');
 					process.stderr.write(logs.stderr || '');
 				}
+
 				docker([ 'rm', '-f', containerName ], { stdio: 'ignore' });
 			}
 		}

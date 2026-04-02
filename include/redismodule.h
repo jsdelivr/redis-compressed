@@ -1,3 +1,11 @@
+/*
+ * Vendored Redis Modules SDK header sourced from Redis 7.0.
+ *
+ * How to update:
+ * - Check Redis release notes for module API changes.
+ * - Compare this file against the upstream redismodule.h for the target release.
+ * - Run local build and integration tests after updating.
+ */
 #ifndef REDISMODULE_H
 #define REDISMODULE_H
 

@@ -81,7 +81,7 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 
 	size_t max_compressed_len = BrotliEncoderMaxCompressedSize(input_len);
 	if (max_compressed_len == 0) {
-		return RedisModule_ReplyWithError(ctx, "ERR brotli max size calculation failed");
+		return RedisModule_ReplyWithErrorFormat(ctx, "ERR brotli input too large (%zu bytes)", input_len);
 	}
 
 	uint8_t* compressed = RedisModule_Alloc(max_compressed_len + 1);

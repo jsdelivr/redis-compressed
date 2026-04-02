@@ -3,7 +3,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { commandExists, createRedisStackHarness } from '../utils.js';
+import { createRedisStackHarness, dockerExists } from '../utils.js';
 
 const modulePath = process.env.REDIS_COMPRESSED_MODULE || process.argv[2];
 const redisStackImage = process.env.REDIS_STACK_IMAGE || 'redis/redis-stack-server:7.4.0-v1';
@@ -18,9 +18,7 @@ if (!fs.existsSync(modulePath)) {
 	process.exit(1);
 }
 
-fs.chmodSync(modulePath, 0o755);
-
-if (!commandExists('docker')) {
+if (!dockerExists()) {
 	console.error('docker is required to run the integration test');
 	process.exit(1);
 }
@@ -42,9 +40,9 @@ const {
 	moduleFile,
 });
 
-process.on('exit', () => {
+process.on('exit', (exitCode) => {
 	try {
-		cleanup(1);
+		cleanup(exitCode == null ? (process.exitCode ?? 0) : exitCode);
 	} catch {
 		// Best-effort cleanup only; don't mask the real test failure.
 	}
@@ -52,8 +50,8 @@ process.on('exit', () => {
 process.on('SIGINT', () => process.exit(1));
 process.on('SIGTERM', () => process.exit(1));
 
-before(() => {
-	startContainer();
+before(async () => {
+	await startContainer();
 });
 
 after(() => {
