@@ -72,6 +72,26 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		return output.toString('hex');
 	}
 
+	function getContainerState () {
+		const inspect = docker([
+			'inspect',
+			'--format',
+			'{{.State.Status}}',
+			containerName,
+		]);
+
+		if (inspect.status !== 0) {
+			return null;
+		}
+
+		return inspect.stdout.trim();
+	}
+
+	function getContainerLogs () {
+		const logs = docker([ 'logs', containerName ]);
+		return `${logs.stdout || ''}${logs.stderr || ''}`.trim();
+	}
+
 	function startContainer () {
 		dockerChecked([
 			'run',
@@ -92,21 +112,24 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		]);
 		containerStarted = true;
 
-		let ready = false;
 		for (let i = 0; i < 30; i += 1) {
-			const ping = docker([ 'exec', containerName, 'redis-cli', 'ping' ]);
-			if (ping.status === 0) {
-				ready = true;
-				break;
+			const state = getContainerState();
+			if (state === 'exited' || state === 'dead') {
+				const logs = getContainerLogs();
+				throw new Error(`redis stack container exited during startup${logs ? `\n${logs}` : ''}`);
 			}
-			ping.stdout && console.log(ping.stdout);
-			ping.stderr && console.log(ping.stderr);
+
+			const ping = docker([ 'exec', containerName, 'redis-cli', 'ping' ]);
+			if (ping.status === 0 && ping.stdout.trim() === 'PONG') {
+				return;
+			}
+
 			sleep(1000);
 		}
 
-		if (!ready) {
-			throw new Error('redis stack container did not become ready');
-		}
+		const state = getContainerState();
+		const logs = getContainerLogs();
+		throw new Error(`redis stack container did not become ready (state: ${state ?? 'missing'})${logs ? `\n${logs}` : ''}`);
 	}
 
 	function cleanup (exitCode) {
