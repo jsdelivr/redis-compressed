@@ -54,10 +54,16 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		return run('docker', args, options);
 	}
 
+	/**
+	 * Run a docker command and assert 0 exit code before returning the result.
+	 */
 	function dockerChecked (args, options = {}) {
 		return runChecked('docker', args, options);
 	}
 
+	/**
+	 * Run redis-cli in the test container and assert 0 exit code before returning the result.
+	 */
 	function cli (args, options = {}) {
 		return docker([ 'exec', containerName, 'redis-cli', '--raw', ...args ], options);
 	}
@@ -66,13 +72,16 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 		return dockerChecked([ 'exec', containerName, 'redis-cli', '--raw', ...args ], options);
 	}
 
-	function cliHex (args) {
+	function cliBuffer (args) {
 		const result = cliChecked(args, { encoding: null });
 		let output = result.stdout;
+
+		// redis-cli --raw prints a trailing newline that is not part of the reply payload.
 		if (output.length > 0 && output[output.length - 1] === 0x0a) {
 			output = output.subarray(0, output.length - 1);
 		}
-		return output.toString('hex');
+
+		return output;
 	}
 
 	function getContainerState () {
@@ -167,8 +176,8 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 
 	return {
 		cli,
+		cliBuffer,
 		cliChecked,
-		cliHex,
 		cleanup,
 		startContainer,
 	};

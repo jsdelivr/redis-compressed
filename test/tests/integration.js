@@ -29,8 +29,8 @@ const containerName = `redis-compressed-test-${process.pid}-${Math.floor(Math.ra
 
 const {
 	cli,
+	cliBuffer,
 	cliChecked,
-	cliHex,
 	cleanup,
 	startContainer
 } = createRedisStackHarness({
@@ -58,8 +58,7 @@ after(() => {
 	cleanup(0);
 });
 
-function decodeCompressedJsonReply (hexReply) {
-	const reply = Buffer.from(hexReply, 'hex');
+function decodeCompressedJsonReply (reply) {
 	assert.ok(reply.length >= 1, 'reply should include a prefix byte');
 
 	const prefix = reply[0];
@@ -114,12 +113,12 @@ test('small JSON replies are returned uncompressed with a 0x00 prefix', () => {
 		'OK',
 	);
 
-	const rawGet = cliHex([ 'JSON.GET', 'small-doc' ]);
-	const compressedGet = cliHex([ 'COMPRESSED.JSON.GET', 'small-doc' ]);
+	const rawGet = cliBuffer([ 'JSON.GET', 'small-doc' ]);
+	const compressedGet = cliBuffer([ 'COMPRESSED.JSON.GET', 'small-doc' ]);
 
-	assert.equal(
+	assert.deepEqual(
 		compressedGet,
-		`00${rawGet}`,
+		Buffer.concat([ Buffer.from([ 0x00 ]), rawGet ]),
 	);
 });
 
@@ -134,16 +133,16 @@ test('large JSON replies are returned compressed with a 0x01 prefix', () => {
 
 	assert.equal(cliChecked([ 'JSON.SET', 'large-doc', '$', largeJson ]).stdout.trim(), 'OK');
 
-	const rawGet = cliHex([ 'JSON.GET', 'large-doc' ]);
-	const compressedGet = cliHex([ 'COMPRESSED.JSON.GET', 'large-doc' ]);
+	const rawGet = cliBuffer([ 'JSON.GET', 'large-doc' ]);
+	const compressedGet = cliBuffer([ 'COMPRESSED.JSON.GET', 'large-doc' ]);
 
 	assert.equal(
 		decodeCompressedJsonReply(compressedGet),
-		Buffer.from(rawGet, 'hex').toString('utf8'),
+		rawGet.toString('utf8'),
 	);
 
-	const largeJsonBytes = rawGet.length / 2;
-	const largeReplyBytes = compressedGet.length / 2 - 1;
+	const largeJsonBytes = rawGet.length;
+	const largeReplyBytes = compressedGet.length - 1;
 
 	assert.ok(largeReplyBytes < largeJsonBytes, `compressed payload should be smaller than the original JSON\njson-bytes: ${largeJsonBytes}\nbrotli-bytes: ${largeReplyBytes}`);
 });
