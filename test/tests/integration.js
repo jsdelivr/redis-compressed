@@ -18,6 +18,8 @@ if (!fs.existsSync(modulePath)) {
 	process.exit(1);
 }
 
+fs.chmodSync(modulePath, 0o755);
+
 if (!commandExists('docker')) {
 	console.error('docker is required to run the integration test');
 	process.exit(1);
