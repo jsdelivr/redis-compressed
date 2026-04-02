@@ -99,6 +99,8 @@ export function createRedisStackHarness ({ containerName, redisStackImage, modul
 				ready = true;
 				break;
 			}
+			ping.stdout && console.log(ping.stdout);
+			ping.stderr && console.log(ping.stderr);
 			sleep(1000);
 		}
 
