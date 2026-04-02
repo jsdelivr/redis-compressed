@@ -17,11 +17,9 @@ jobs:
           - arch: x64
             runs_on: ubuntu-24.04
             artifact_name: redis-compressed-linux-x64
-            module_name: redis-compressed-linux-x64.so
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             artifact_name: redis-compressed-linux-arm64
-            module_name: redis-compressed-linux-arm64.so
 
     steps:
       - name: Install build dependencies
@@ -33,16 +31,11 @@ jobs:
       - name: Build
         run: make release
 
-      - name: Package artifact
-        run: |
-          mkdir -p dist
-          cp build/release/libredis-compressed.so dist/${{ matrix.module_name }}
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.module_name }}
+          path: build/release/libredis-compressed.so
           if-no-files-found: error
 
   linux-test:
@@ -56,11 +49,9 @@ jobs:
           - arch: x64
             runs_on: ubuntu-24.04
             artifact_name: redis-compressed-linux-x64
-            module_name: redis-compressed-linux-x64.so
           - arch: arm64
             runs_on: ubuntu-24.04-arm
             artifact_name: redis-compressed-linux-arm64
-            module_name: redis-compressed-linux-arm64.so
 
     steps:
       - name: Install test dependencies
@@ -76,4 +67,4 @@ jobs:
           path: build/release
 
       - name: Run integration tests
-        run: REDIS_COMPRESSED_MODULE="$PWD/build/release/${{ matrix.module_name }}" node --test test/tests/integration.js
+        run: REDIS_COMPRESSED_MODULE="$PWD/build/release/libredis-compressed.so" node --test test/tests/integration.js
