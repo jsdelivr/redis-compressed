@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-build:
+    uses: ./.github/workflows/build.yml
+
+  linux-test:
+    name: Test Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs_on }}
+    needs: linux-build
+    env:
+      NODE_VERSION: '24'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-24.04
+            artifact_name: redis-compressed-linux-amd64
+          - arch: arm64
+            runs_on: ubuntu-24.04-arm
+            artifact_name: redis-compressed-linux-arm64
+
+    steps:
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y tar
+
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download built module
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build/release
+
+      - name: Make module executable
+        run: chmod +x build/release/*.so
+
+      - name: Run integration tests
+        run: REDIS_COMPRESSED_MODULE="$PWD/build/release/libredis-compressed.so" node --test test/tests/integration.js
