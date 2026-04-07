@@ -21,9 +21,9 @@ The encoding format is:
 
 The command preserves RedisJSON error behavior for missing keys and invalid access.
 
-`COMPRESSED.JSON.COMPRESS key` fetches the full JSON document with `JSON.GET key`, encodes it with the same flag format, and stores it back into `key` as a Redis string.
+`COMPRESSED.JSON.COMPRESS key [INDENT indent] [NEWLINE newline] [SPACE space]` fetches the JSON document with `JSON.GET` using the same optional formatting arguments, encodes that reply with the same flag format, and stores it back into `key` as a Redis string.
 
-After `COMPRESSED.JSON.COMPRESS`, the key is no longer a RedisJSON value. `JSON.GET`, `JSON.SET`, and other RedisJSON commands will treat it as a plain string key. `COMPRESSED.JSON.GET` still works for that key, but only in the bare `COMPRESSED.JSON.GET key` form; path and formatting arguments are rejected because the stored value is a full pre-encoded payload rather than a live RedisJSON document.
+After `COMPRESSED.JSON.COMPRESS`, the key is no longer a RedisJSON value. `JSON.GET`, `JSON.SET`, and other RedisJSON commands will treat it as a plain string key. `COMPRESSED.JSON.GET` still works for that key, but only in the bare `COMPRESSED.JSON.GET key` form; path and formatting arguments are rejected because the stored value is a full pre-encoded payload rather than a live RedisJSON document. Repeated `COMPRESSED.JSON.COMPRESS` calls on an already stored payload are treated as a no-op, even if formatting arguments are provided.
 
 ## Module Config
 

@@ -402,6 +402,36 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		assertStringGetMatchesCompressedJsonGet('compress-large-doc');
 	});
 
+	test('compress forwards JSON.GET formatting options before storing', () => {
+		assert.equal(
+			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			'OK',
+		);
+
+		assert.equal(
+			cliChecked([ 'JSON.SET', 'compress-formatted-doc', '$', '{"outer":{"message":"hello","value":1}}' ]).stdout.trim(),
+			'OK',
+		);
+
+		const args = [
+			'compress-formatted-doc',
+			'INDENT', '  ',
+			'NEWLINE', '\n',
+			'SPACE', ' ',
+		];
+		const expected = cliBuffer([ 'JSON.GET', ...args ]).toString('utf8');
+
+		assert.equal(
+			cliChecked([ 'COMPRESSED.JSON.COMPRESS', ...args ]).stdout.trim(),
+			'OK',
+		);
+
+		const stored = cliBuffer([ 'GET', 'compress-formatted-doc' ]);
+		assertTransportPrefix(stored, '00');
+		assert.equal(decodeCompressedJsonReply(stored), expected);
+		assertStringGetMatchesCompressedJsonGet('compress-formatted-doc');
+	});
+
 	test('compress is idempotent for keys already stored as compressed blobs', () => {
 		assert.equal(
 			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
@@ -423,7 +453,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		const once = cliBuffer([ 'GET', 'compress-idempotent-doc' ]);
 
 		assert.equal(
-			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'compress-idempotent-doc' ]).stdout.trim(),
+			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'compress-idempotent-doc', 'INDENT', '  ', 'NEWLINE', '\n', 'SPACE', ' ' ]).stdout.trim(),
 			'OK',
 		);
 

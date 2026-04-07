@@ -163,7 +163,7 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) {
 	RedisModule_AutoMemory(ctx);
 
-	if (argc != 2) {
+	if (argc < 2) {
 		return RedisModule_WrongArity(ctx);
 	}
 
@@ -186,7 +186,7 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 
 	RedisModule_CloseKey(key);
 
-	RedisModuleCallReply* json_reply = RedisModule_Call(ctx, "JSON.GET", "s", argv[1]);
+	RedisModuleCallReply* json_reply = RedisModule_Call(ctx, "JSON.GET", "v", argv + 1, argc - 1);
 	if (json_reply == NULL) {
 		return RedisModule_ReplyWithError(ctx, "ERR failed to call JSON.GET");
 	}
