@@ -3,6 +3,7 @@
 
 #include <brotli/encode.h>
 #include <limits.h>
+#include <strings.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -71,6 +72,30 @@ static int ReplyWithEncodePayloadError(RedisModuleCtx* ctx, EncodePayloadStatus 
 
 static int IsCompressedPayload(const uint8_t* input, size_t input_len) {
 	return input_len >= 1 && (input[0] == 0x00 || input[0] == 0x01);
+}
+
+static int IsFormattingKeyword(const char* arg, size_t arg_len) {
+	return (arg_len == 6 && strncasecmp(arg, "INDENT", 6) == 0) ||
+		(arg_len == 7 && strncasecmp(arg, "NEWLINE", 7) == 0) ||
+		(arg_len == 5 && strncasecmp(arg, "SPACE", 5) == 0);
+}
+
+static int ValidateCompressArguments(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) {
+	if ((argc - 2) % 2 != 0) {
+		RedisModule_ReplyWithError(ctx, "ERR unsupported arguments; only INDENT, NEWLINE, and SPACE are supported");
+		return REDISMODULE_ERR;
+	}
+
+	for (int i = 2; i < argc; i += 2) {
+		size_t arg_len = 0;
+		const char* arg = RedisModule_StringPtrLen(argv[i], &arg_len);
+		if (!IsFormattingKeyword(arg, arg_len)) {
+			RedisModule_ReplyWithError(ctx, "ERR unsupported arguments; only INDENT, NEWLINE, and SPACE are supported");
+			return REDISMODULE_ERR;
+		}
+	}
+
+	return REDISMODULE_OK;
 }
 
 static long long GetCompressionLevelConfig(const char* name, void* privdata) {
@@ -165,6 +190,10 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 
 	if (argc < 2) {
 		return RedisModule_WrongArity(ctx);
+	}
+
+	if (ValidateCompressArguments(ctx, argv, argc) == REDISMODULE_ERR) {
+		return REDISMODULE_OK;
 	}
 
 	RedisModuleKey* key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);

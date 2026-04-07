@@ -432,6 +432,59 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		assertStringGetMatchesCompressedJsonGet('compress-formatted-doc');
 	});
 
+	test('compress accepts formatting keywords regardless of case', () => {
+		assert.equal(
+			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			'OK',
+		);
+
+		assert.equal(
+			cliChecked([ 'JSON.SET', 'compress-formatted-case-doc', '$', '{"outer":{"message":"hello","value":1}}' ]).stdout.trim(),
+			'OK',
+		);
+
+		const mixedCaseArgs = [
+			'compress-formatted-case-doc',
+			'indent', '  ',
+			'NewLine', '\n',
+			'sPaCe', ' ',
+		];
+		const expected = cliBuffer([ 'JSON.GET', 'compress-formatted-case-doc', 'INDENT', '  ', 'NEWLINE', '\n', 'SPACE', ' ' ]).toString('utf8');
+
+		assert.equal(
+			cliChecked([ 'COMPRESSED.JSON.COMPRESS', ...mixedCaseArgs ]).stdout.trim(),
+			'OK',
+		);
+
+		const stored = cliBuffer([ 'GET', 'compress-formatted-case-doc' ]);
+		assertTransportPrefix(stored, '00');
+		assert.equal(decodeCompressedJsonReply(stored), expected);
+		assertStringGetMatchesCompressedJsonGet('compress-formatted-case-doc');
+	});
+
+	test('compress rejects unsupported arguments such as JSON paths', () => {
+		assert.equal(
+			cliChecked([ 'JSON.SET', 'compress-path-doc', '$', '{"outer":{"keep":1,"drop":2}}' ]).stdout.trim(),
+			'OK',
+		);
+
+		const before = cliChecked([ 'JSON.GET', 'compress-path-doc' ]).stdout.trim();
+		const result = cli([ 'COMPRESSED.JSON.COMPRESS', 'compress-path-doc', '$.outer.keep' ]);
+		assert.equal(
+			result.stdout.trim(),
+			'ERR unsupported arguments; only INDENT, NEWLINE, and SPACE are supported',
+		);
+
+		assert.equal(
+			cliChecked([ 'JSON.GET', 'compress-path-doc' ]).stdout.trim(),
+			before,
+		);
+		assert.equal(
+			cliChecked([ 'TYPE', 'compress-path-doc' ]).stdout.trim(),
+			'ReJSON-RL',
+		);
+	});
+
 	test('compress is idempotent for keys already stored as compressed blobs', () => {
 		assert.equal(
 			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
