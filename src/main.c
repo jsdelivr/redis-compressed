@@ -288,7 +288,7 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) 
 		ctx,
 		"COMPRESSED.JSON.COMPRESS",
 		CompressedJsonCompressCommand,
-		"write",
+		"write deny-oom",
 		1,
 		1,
 		1) == REDISMODULE_ERR) {
