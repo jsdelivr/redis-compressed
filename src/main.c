@@ -277,7 +277,7 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) 
 		ctx,
 		"COMPRESSED.JSON.GET",
 		CompressedJsonGetCommand,
-		"readonly",
+		"readonly deny-oom",
 		1,
 		1,
 		1) == REDISMODULE_ERR) {
