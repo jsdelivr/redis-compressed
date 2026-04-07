@@ -1,24 +1,29 @@
 # redis-compressed
 
-A Redis module that adds `COMPRESSED.JSON.GET`, a read-only command that wraps `JSON.GET` and returns a Brotli-compressed version of the data.
+A Redis module that adds `COMPRESSED.JSON.GET`, a read-only command that wraps `JSON.GET` and returns a Brotli-compressed version of the data, and `COMPRESSED.JSON.COMPRESS`, a write command that rewrites a RedisJSON value into a stored flagged blob.
 
 ## Why
 
 For large documents, response times may easily become limited by network transfer. Applying light compression during transport may improve the overall performance significantly despite the small associated CPU overhead.
 
-For plain strings (e.g., using `SET`), this would be better handled in the client by storing compressed data directly. However, with JSON, if we want to keep the ability to work with individual fields using the existing RedisJSON commands, the data must be stored in its original form. This module therefore implements only in-transit compression for when the data is read.
-
-Currently, the only supported function is `COMPRESSED.JSON.GET`,
-acting as a proxy to `JSON.GET`. Support for other data types or functions may be added later.
+For plain strings (e.g., using `SET`), this would be better handled in the client by storing compressed data directly. However, with JSON, if we want to keep the ability to work with individual fields using the existing RedisJSON commands, the data must be stored in its original form. This module therefore implements in-transit compression for when the data is read. Additionally, it allows rewriting JSON keys to compressed strings once data manupulation is no longer needed.
 
 ## Behavior
 
-`COMPRESSED.JSON.GET key [path ...]` forwards its arguments to `JSON.GET` and encodes the reply as:
+`COMPRESSED.JSON.GET key [path ...]` behaves as follows:
 
+- if `key` is a RedisJSON value, it forwards its arguments to `JSON.GET` and encodes the reply
+- if `key` is already a plain string beginning with the module's flag byte, it returns that value unchanged
+
+The encoding format is:
 - `0x00` + raw JSON when the payload is smaller than `compressed.threshold-bytes`
 - `0x01` + Brotli-compressed JSON when the payload is at or above the threshold
 
 The command preserves RedisJSON error behavior for missing keys and invalid access.
+
+`COMPRESSED.JSON.COMPRESS key` fetches the full JSON document with `JSON.GET key`, encodes it with the same flag format, and stores it back into `key` as a Redis string.
+
+After `COMPRESSED.JSON.COMPRESS`, the key is no longer a RedisJSON value. `JSON.GET`, `JSON.SET`, and other RedisJSON commands will treat it as a plain string key.
 
 ## Module Config
 
@@ -63,6 +68,8 @@ Example usage:
 
 ```redis
 JSON.SET doc $ "{\"message\":\"hello\"}"
+COMPRESSED.JSON.GET doc
+COMPRESSED.JSON.COMPRESS doc
 COMPRESSED.JSON.GET doc
 ```
 

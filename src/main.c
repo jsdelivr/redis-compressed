@@ -9,6 +9,52 @@
 static long long g_brotli_quality = 1;
 static long long g_compression_threshold = 10 * 1024;
 
+static int EncodePayload(RedisModuleCtx* ctx, const uint8_t* input, size_t input_len, uint8_t** encoded_out, size_t* encoded_len_out) {
+	if (input_len < (size_t)g_compression_threshold) {
+		size_t encoded_len = input_len + 1;
+		uint8_t* encoded = RedisModule_Alloc(encoded_len);
+		encoded[0] = 0x00;
+		if (input_len > 0) {
+			memcpy(encoded + 1, input, input_len);
+		}
+		*encoded_out = encoded;
+		*encoded_len_out = encoded_len;
+		return REDISMODULE_OK;
+	}
+
+	size_t max_compressed_len = BrotliEncoderMaxCompressedSize(input_len);
+	if (max_compressed_len == 0) {
+		return RedisModule_ReplyWithErrorFormat(ctx, "ERR brotli input too large (%zu bytes)", input_len);
+	}
+
+	uint8_t* compressed = RedisModule_Alloc(max_compressed_len + 1);
+	size_t compressed_len = max_compressed_len;
+
+	BROTLI_BOOL ok = BrotliEncoderCompress(
+		(int)g_brotli_quality,
+		BROTLI_DEFAULT_WINDOW,
+		BROTLI_MODE_TEXT,
+		input_len,
+		input,
+		&compressed_len,
+		compressed + 1
+	);
+
+	if (!ok) {
+		RedisModule_Free(compressed);
+		return RedisModule_ReplyWithError(ctx, "ERR brotli compression failed");
+	}
+
+	compressed[0] = 0x01;
+	*encoded_out = compressed;
+	*encoded_len_out = compressed_len + 1;
+	return REDISMODULE_OK;
+}
+
+static int IsCompressedPayload(const uint8_t* input, size_t input_len) {
+	return input_len >= 1 && (input[0] == 0x00 || input[0] == 0x01);
+}
+
 static long long GetCompressionLevelConfig(const char* name, void* privdata) {
 	REDISMODULE_NOT_USED(name);
 	REDISMODULE_NOT_USED(privdata);
@@ -44,6 +90,19 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 		return RedisModule_WrongArity(ctx);
 	}
 
+	RedisModuleKey* key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+	int key_type = RedisModule_KeyType(key);
+	if (key_type == REDISMODULE_KEYTYPE_STRING) {
+		size_t input_len = 0;
+		const char* input = RedisModule_StringDMA(key, &input_len, REDISMODULE_READ);
+		if (input != NULL && IsCompressedPayload((const uint8_t*)input, input_len)) {
+			RedisModule_ReplyWithStringBuffer(ctx, input, input_len);
+			return REDISMODULE_OK;
+		}
+
+		return RedisModule_ReplyWithError(ctx, "ERR the string does not contain a compressed payload");
+	}
+
 	RedisModuleCallReply* json_reply = RedisModule_Call(ctx, "JSON.GET", "v", argv + 1, argc - 1);
 	if (json_reply == NULL) {
 		return RedisModule_ReplyWithError(ctx, "ERR failed to call JSON.GET");
@@ -66,46 +125,80 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 
 	size_t input_len = 0;
 	const uint8_t* input = (const uint8_t*)RedisModule_CallReplyStringPtr(json_reply, &input_len);
+	uint8_t* encoded = NULL;
+	size_t encoded_len = 0;
+	int encode_result = EncodePayload(ctx, input, input_len, &encoded, &encoded_len);
+	if (encode_result != REDISMODULE_OK) {
+		return encode_result;
+	}
 
-	if (input_len < (size_t)g_compression_threshold) {
-		size_t reply_len = input_len + 1;
-		uint8_t* reply = RedisModule_Alloc(reply_len);
-		reply[0] = 0x00;
-		if (input_len > 0) {
-			memcpy(reply + 1, input, input_len);
-		}
-		RedisModule_ReplyWithStringBuffer(ctx, (const char*)reply, reply_len);
-		RedisModule_Free(reply);
+	RedisModule_ReplyWithStringBuffer(ctx, (const char*)encoded, encoded_len);
+	RedisModule_Free(encoded);
+	return REDISMODULE_OK;
+}
+
+static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) {
+	RedisModule_AutoMemory(ctx);
+
+	if (argc != 2) {
+		return RedisModule_WrongArity(ctx);
+	}
+
+	RedisModuleKey* key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
+	int key_type = RedisModule_KeyType(key);
+	if (key_type == REDISMODULE_KEYTYPE_EMPTY) {
+		RedisModule_ReplyWithNull(ctx);
 		return REDISMODULE_OK;
 	}
 
-	size_t max_compressed_len = BrotliEncoderMaxCompressedSize(input_len);
-	if (max_compressed_len == 0) {
-		return RedisModule_ReplyWithErrorFormat(ctx, "ERR brotli input too large (%zu bytes)", input_len);
+	if (key_type == REDISMODULE_KEYTYPE_STRING) {
+		size_t input_len = 0;
+		const char* input = RedisModule_StringDMA(key, &input_len, REDISMODULE_READ);
+		if (input != NULL && IsCompressedPayload((const uint8_t*)input, input_len)) {
+			RedisModule_ReplyWithSimpleString(ctx, "OK");
+			return REDISMODULE_OK;
+		}
 	}
 
-	uint8_t* compressed = RedisModule_Alloc(max_compressed_len + 1);
-	size_t compressed_len = max_compressed_len;
-
-	BROTLI_BOOL ok = BrotliEncoderCompress(
-		(int)g_brotli_quality,
-		BROTLI_DEFAULT_WINDOW,
-		BROTLI_MODE_TEXT,
-		input_len,
-		input,
-		&compressed_len,
-		compressed + 1
-	);
-
-	if (!ok) {
-		RedisModule_Free(compressed);
-		return RedisModule_ReplyWithError(ctx, "ERR brotli compression failed");
+	RedisModuleCallReply* json_reply = RedisModule_Call(ctx, "JSON.GET", "s", argv[1]);
+	if (json_reply == NULL) {
+		return RedisModule_ReplyWithError(ctx, "ERR failed to call JSON.GET");
 	}
 
-	compressed[0] = 0x01;
-	RedisModule_ReplyWithStringBuffer(ctx, (const char*)compressed, compressed_len + 1);
+	int reply_type = RedisModule_CallReplyType(json_reply);
+	if (reply_type == REDISMODULE_REPLY_ERROR) {
+		RedisModule_ReplyWithCallReply(ctx, json_reply);
+		return REDISMODULE_OK;
+	}
 
-	RedisModule_Free(compressed);
+	if (reply_type == REDISMODULE_REPLY_NULL) {
+		RedisModule_ReplyWithNull(ctx);
+		return REDISMODULE_OK;
+	}
+
+	if (reply_type != REDISMODULE_REPLY_STRING) {
+		return RedisModule_ReplyWithError(ctx, "ERR unexpected JSON.GET reply type");
+	}
+
+	size_t input_len = 0;
+	const uint8_t* input = (const uint8_t*)RedisModule_CallReplyStringPtr(json_reply, &input_len);
+	uint8_t* encoded = NULL;
+	size_t encoded_len = 0;
+	int encode_result = EncodePayload(ctx, input, input_len, &encoded, &encoded_len);
+
+	if (encode_result != REDISMODULE_OK) {
+		return encode_result;
+	}
+
+	RedisModuleString* value = RedisModule_CreateString(ctx, (const char*)encoded, encoded_len);
+	RedisModule_Free(encoded);
+
+	if (RedisModule_StringSet(key, value) == REDISMODULE_ERR) {
+		return RedisModule_ReplyWithError(ctx, "ERR failed to store the compressed value");
+	}
+
+	RedisModule_ReplicateVerbatim(ctx);
+	RedisModule_ReplyWithSimpleString(ctx, "OK");
 	return REDISMODULE_OK;
 }
 
@@ -154,6 +247,17 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) 
 		"COMPRESSED.JSON.GET",
 		CompressedJsonGetCommand,
 		"readonly",
+		1,
+		1,
+		1) == REDISMODULE_ERR) {
+		return REDISMODULE_ERR;
+	}
+
+	if (RedisModule_CreateCommand(
+		ctx,
+		"COMPRESSED.JSON.COMPRESS",
+		CompressedJsonCompressCommand,
+		"write",
 		1,
 		1,
 		1) == REDISMODULE_ERR) {
