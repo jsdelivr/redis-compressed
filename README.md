@@ -6,7 +6,7 @@ A Redis module that adds `COMPRESSED.JSON.GET`, a read-only command that wraps `
 
 For large documents, response times may easily become limited by network transfer. Applying light compression during transport may improve the overall performance significantly despite the small associated CPU overhead.
 
-For plain strings (e.g., using `SET`), this would be better handled in the client by storing compressed data directly. However, with JSON, if we want to keep the ability to work with individual fields using the existing RedisJSON commands, the data must be stored in its original form. This module therefore implements in-transit compression for when the data is read. Additionally, it allows rewriting JSON keys to compressed strings once data manupulation is no longer needed.
+For plain strings (e.g., using `SET`), this would be better handled in the client by storing compressed data directly. However, with JSON, if we want to keep the ability to work with individual fields using the existing RedisJSON commands, the data must be stored in its original form. This module therefore implements in-transit compression for when the data is read. Additionally, it allows rewriting JSON keys to compressed strings once data manipulation is no longer needed.
 
 ## Behavior
 
