@@ -103,6 +103,8 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 		return RedisModule_ReplyWithError(ctx, "ERR the string does not contain a compressed payload");
 	}
 
+	RedisModule_CloseKey(key);
+
 	RedisModuleCallReply* json_reply = RedisModule_Call(ctx, "JSON.GET", "v", argv + 1, argc - 1);
 	if (json_reply == NULL) {
 		return RedisModule_ReplyWithError(ctx, "ERR failed to call JSON.GET");
@@ -160,6 +162,8 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 		}
 	}
 
+	RedisModule_CloseKey(key);
+
 	RedisModuleCallReply* json_reply = RedisModule_Call(ctx, "JSON.GET", "s", argv[1]);
 	if (json_reply == NULL) {
 		return RedisModule_ReplyWithError(ctx, "ERR failed to call JSON.GET");
@@ -190,6 +194,7 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 		return encode_result;
 	}
 
+	key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
 	RedisModuleString* value = RedisModule_CreateString(ctx, (const char*)encoded, encoded_len);
 	RedisModule_Free(encoded);
 
