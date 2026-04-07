@@ -402,4 +402,33 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		assert.deepEqual(twice, once);
 		assertStringGetMatchesCompressedJsonGet('compress-idempotent-doc');
 	});
+
+	test('compress preserves an existing key expiry', () => {
+		assert.equal(
+			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			'OK',
+		);
+
+		assert.equal(
+			cliChecked([ 'JSON.SET', 'compress-expiring-doc', '$', '{"message":"hello"}' ]).stdout.trim(),
+			'OK',
+		);
+
+		assert.equal(
+			cliChecked([ 'PEXPIRE', 'compress-expiring-doc', '60000' ]).stdout.trim(),
+			'1',
+		);
+
+		const ttlBefore = Number.parseInt(cliChecked([ 'PTTL', 'compress-expiring-doc' ]).stdout.trim(), 10);
+		assert.ok(ttlBefore > 0, `expected positive ttl before compression, got ${ttlBefore}`);
+
+		assert.equal(
+			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'compress-expiring-doc' ]).stdout.trim(),
+			'OK',
+		);
+
+		const ttlAfter = Number.parseInt(cliChecked([ 'PTTL', 'compress-expiring-doc' ]).stdout.trim(), 10);
+		assert.ok(ttlAfter > 0, `expected positive ttl after compression, got ${ttlAfter}`);
+		assert.ok(ttlAfter <= ttlBefore, `ttl should not increase after compression\nbefore: ${ttlBefore}\nafter: ${ttlAfter}`);
+	});
 });

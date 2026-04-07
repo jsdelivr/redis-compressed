@@ -148,6 +148,7 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 
 	RedisModuleKey* key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
 	int key_type = RedisModule_KeyType(key);
+	mstime_t abs_expire = RedisModule_GetAbsExpire(key);
 	if (key_type == REDISMODULE_KEYTYPE_EMPTY) {
 		RedisModule_ReplyWithNull(ctx);
 		return REDISMODULE_OK;
@@ -200,6 +201,10 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 
 	if (RedisModule_StringSet(key, value) == REDISMODULE_ERR) {
 		return RedisModule_ReplyWithError(ctx, "ERR failed to store the compressed value");
+	}
+
+	if (abs_expire != REDISMODULE_NO_EXPIRE && RedisModule_SetAbsExpire(key, abs_expire) == REDISMODULE_ERR) {
+		return RedisModule_ReplyWithError(ctx, "ERR failed to restore key expiry");
 	}
 
 	RedisModule_ReplicateVerbatim(ctx);
