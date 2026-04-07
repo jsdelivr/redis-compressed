@@ -114,6 +114,9 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 		size_t input_len = 0;
 		const char* input = RedisModule_StringDMA(key, &input_len, REDISMODULE_READ);
 		if (input != NULL && IsCompressedPayload((const uint8_t*)input, input_len)) {
+			if (argc != 2) {
+				return RedisModule_ReplyWithError(ctx, "ERR path and formatting arguments are not supported for stored compressed values");
+			}
 			RedisModule_ReplyWithStringBuffer(ctx, input, input_len);
 			return REDISMODULE_OK;
 		}

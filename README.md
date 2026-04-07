@@ -13,7 +13,7 @@ For plain strings (e.g., using `SET`), this would be better handled in the clien
 `COMPRESSED.JSON.GET key [path ...]` behaves as follows:
 
 - if `key` is a RedisJSON value, it forwards its arguments to `JSON.GET` and encodes the reply
-- if `key` is already a plain string beginning with the module's flag byte, it returns that value unchanged
+- if `key` is already a plain string beginning with the module's flag byte, it only accepts `COMPRESSED.JSON.GET key` and returns that stored value unchanged
 
 The encoding format is:
 - `0x00` + raw JSON when the payload is smaller than `compressed.threshold-bytes`
@@ -23,7 +23,7 @@ The command preserves RedisJSON error behavior for missing keys and invalid acce
 
 `COMPRESSED.JSON.COMPRESS key` fetches the full JSON document with `JSON.GET key`, encodes it with the same flag format, and stores it back into `key` as a Redis string.
 
-After `COMPRESSED.JSON.COMPRESS`, the key is no longer a RedisJSON value. `JSON.GET`, `JSON.SET`, and other RedisJSON commands will treat it as a plain string key.
+After `COMPRESSED.JSON.COMPRESS`, the key is no longer a RedisJSON value. `JSON.GET`, `JSON.SET`, and other RedisJSON commands will treat it as a plain string key. `COMPRESSED.JSON.GET` still works for that key, but only in the bare `COMPRESSED.JSON.GET key` form; path and formatting arguments are rejected because the stored value is a full pre-encoded payload rather than a live RedisJSON document.
 
 ## Module Config
 

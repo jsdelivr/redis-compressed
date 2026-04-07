@@ -276,6 +276,35 @@ describe('COMPRESSED.JSON.GET', () => {
 		const multiPathArgs = [ 'path-large-doc', '$.outer.first', '$.items[*].id' ];
 		assertJsonGetMatchesCompressedJsonGetAsObject(multiPathArgs, '01');
 	});
+
+	test('stored compressed values reject JSON.GET path and formatting arguments', () => {
+		assert.equal(
+			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			'OK',
+		);
+
+		assert.equal(
+			cliChecked([ 'JSON.SET', 'stored-args-doc', '$', '{"outer":{"message":"' + 'x'.repeat(2048) + '"}}' ]).stdout.trim(),
+			'OK',
+		);
+
+		assert.equal(
+			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'stored-args-doc' ]).stdout.trim(),
+			'OK',
+		);
+
+		const pathResult = cli([ 'COMPRESSED.JSON.GET', 'stored-args-doc', '$.outer.message' ]);
+		assert.equal(
+			pathResult.stdout.trim(),
+			'ERR path and formatting arguments are not supported for stored compressed values',
+		);
+
+		const formattingResult = cli([ 'COMPRESSED.JSON.GET', 'stored-args-doc', 'INDENT', '  ' ]);
+		assert.equal(
+			formattingResult.stdout.trim(),
+			'ERR path and formatting arguments are not supported for stored compressed values',
+		);
+	});
 });
 
 describe('COMPRESSED.JSON.COMPRESS', () => {
