@@ -9,7 +9,13 @@
 static long long g_brotli_quality = 1;
 static long long g_compression_threshold = 10 * 1024;
 
-static int EncodePayload(RedisModuleCtx* ctx, const uint8_t* input, size_t input_len, uint8_t** encoded_out, size_t* encoded_len_out) {
+typedef enum {
+	ENCODE_PAYLOAD_OK = 0,
+	ENCODE_PAYLOAD_ERR_INPUT_TOO_LARGE,
+	ENCODE_PAYLOAD_ERR_BROTLI_FAILED,
+} EncodePayloadStatus;
+
+static EncodePayloadStatus EncodePayload(const uint8_t* input, size_t input_len, uint8_t** encoded_out, size_t* encoded_len_out) {
 	if (input_len < (size_t)g_compression_threshold) {
 		size_t encoded_len = input_len + 1;
 		uint8_t* encoded = RedisModule_Alloc(encoded_len);
@@ -19,12 +25,12 @@ static int EncodePayload(RedisModuleCtx* ctx, const uint8_t* input, size_t input
 		}
 		*encoded_out = encoded;
 		*encoded_len_out = encoded_len;
-		return REDISMODULE_OK;
+		return ENCODE_PAYLOAD_OK;
 	}
 
 	size_t max_compressed_len = BrotliEncoderMaxCompressedSize(input_len);
 	if (max_compressed_len == 0) {
-		return RedisModule_ReplyWithErrorFormat(ctx, "ERR brotli input too large (%zu bytes)", input_len);
+		return ENCODE_PAYLOAD_ERR_INPUT_TOO_LARGE;
 	}
 
 	uint8_t* compressed = RedisModule_Alloc(max_compressed_len + 1);
@@ -42,13 +48,25 @@ static int EncodePayload(RedisModuleCtx* ctx, const uint8_t* input, size_t input
 
 	if (!ok) {
 		RedisModule_Free(compressed);
-		return RedisModule_ReplyWithError(ctx, "ERR brotli compression failed");
+		return ENCODE_PAYLOAD_ERR_BROTLI_FAILED;
 	}
 
 	compressed[0] = 0x01;
 	*encoded_out = compressed;
 	*encoded_len_out = compressed_len + 1;
-	return REDISMODULE_OK;
+	return ENCODE_PAYLOAD_OK;
+}
+
+static int ReplyWithEncodePayloadError(RedisModuleCtx* ctx, EncodePayloadStatus status, size_t input_len) {
+	switch (status) {
+		case ENCODE_PAYLOAD_ERR_INPUT_TOO_LARGE:
+			return RedisModule_ReplyWithErrorFormat(ctx, "ERR brotli input too large (%zu bytes)", input_len);
+		case ENCODE_PAYLOAD_ERR_BROTLI_FAILED:
+			return RedisModule_ReplyWithError(ctx, "ERR brotli compression failed");
+		case ENCODE_PAYLOAD_OK:
+		default:
+			return RedisModule_ReplyWithError(ctx, "ERR unexpected payload encoding status");
+	}
 }
 
 static int IsCompressedPayload(const uint8_t* input, size_t input_len) {
@@ -129,9 +147,9 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 	const uint8_t* input = (const uint8_t*)RedisModule_CallReplyStringPtr(json_reply, &input_len);
 	uint8_t* encoded = NULL;
 	size_t encoded_len = 0;
-	int encode_result = EncodePayload(ctx, input, input_len, &encoded, &encoded_len);
-	if (encode_result != REDISMODULE_OK) {
-		return encode_result;
+	EncodePayloadStatus encode_status = EncodePayload(input, input_len, &encoded, &encoded_len);
+	if (encode_status != ENCODE_PAYLOAD_OK) {
+		return ReplyWithEncodePayloadError(ctx, encode_status, input_len);
 	}
 
 	RedisModule_ReplyWithStringBuffer(ctx, (const char*)encoded, encoded_len);
@@ -189,10 +207,10 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 	const uint8_t* input = (const uint8_t*)RedisModule_CallReplyStringPtr(json_reply, &input_len);
 	uint8_t* encoded = NULL;
 	size_t encoded_len = 0;
-	int encode_result = EncodePayload(ctx, input, input_len, &encoded, &encoded_len);
+	EncodePayloadStatus encode_status = EncodePayload(input, input_len, &encoded, &encoded_len);
 
-	if (encode_result != REDISMODULE_OK) {
-		return encode_result;
+	if (encode_status != ENCODE_PAYLOAD_OK) {
+		return ReplyWithEncodePayloadError(ctx, encode_status, input_len);
 	}
 
 	key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
