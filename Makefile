@@ -8,11 +8,11 @@ RELEASE_MODULE := $(abspath $(RELEASE_BUILD_DIR)/libredis-compressed.so)
 
 debug:
 	cmake -S . -B $(DEBUG_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug
-	cmake --build $(DEBUG_BUILD_DIR) --parallel
+	cmake --build $(DEBUG_BUILD_DIR) --parallel -- --no-print-directory
 
 release:
 	cmake -S . -B $(RELEASE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
-	cmake --build $(RELEASE_BUILD_DIR) --parallel
+	cmake --build $(RELEASE_BUILD_DIR) --parallel -- --no-print-directory
 
 test: release
 	REDIS_COMPRESSED_MODULE=$(RELEASE_MODULE) node --test $(TEST_FILE)
