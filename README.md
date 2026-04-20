@@ -16,7 +16,7 @@ For plain strings (e.g., using `SET`), this would be better handled in the clien
 - if `key` is already a plain string beginning with the module's flag byte, it only accepts `COMPRESSED.JSON.GET key` and returns that stored value unchanged
 
 The encoding format is:
-- `0x00` + raw JSON when the payload is smaller than `compressed.threshold-bytes`
+- `0x00` + raw JSON when the payload is smaller than `compressed.transport-threshold-bytes`
 - `0x01` + Brotli-compressed JSON when the payload is at or above the threshold
 
 The command preserves RedisJSON error behavior for missing keys and invalid access.
@@ -27,18 +27,24 @@ After `COMPRESSED.JSON.COMPRESS`, the key is no longer a RedisJSON value. `JSON.
 
 ## Module Config
 
-The module registers two runtime config values:
+The module registers four runtime config values:
 
-- `compressed.level`
-  Brotli quality level, default `1`, allowed range `0..11`
-- `compressed.threshold-bytes`
-  Minimum JSON reply size before compression is applied, default `10240`
+- `compressed.transport-level`
+  Brotli quality level used by `COMPRESSED.JSON.GET`, default `1`, allowed range `0..11`
+- `compressed.storage-level`
+  Brotli quality level used by `COMPRESSED.JSON.COMPRESS`, default `2`, allowed range `0..11`
+- `compressed.transport-threshold-bytes`
+  Minimum JSON reply size before `COMPRESSED.JSON.GET` compresses the response, default `10240`
+- `compressed.storage-threshold-bytes`
+  Minimum JSON reply size before `COMPRESSED.JSON.COMPRESS` stores a compressed payload, default `10240`
 
 Example:
 
 ```redis
-CONFIG SET compressed.level 4
-CONFIG SET compressed.threshold-bytes 4096
+CONFIG SET compressed.transport-level 4
+CONFIG SET compressed.storage-level 5
+CONFIG SET compressed.transport-threshold-bytes 4096
+CONFIG SET compressed.storage-threshold-bytes 4096
 ```
 
 ## Build and Test
