@@ -344,7 +344,7 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) 
 	if (RedisModule_RegisterNumericConfig(
 		ctx,
 		"storage-threshold-bytes",
-		10 * 1024,
+		1 * 1024,
 		REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_MEMORY,
 		0,
 		LLONG_MAX,
