@@ -6,8 +6,10 @@
 #include <stdint.h>
 #include <string.h>
 
-static long long g_brotli_quality = 1;
-static long long g_compression_threshold = 10 * 1024;
+static long long g_transport_brotli_quality = 1;
+static long long g_storage_brotli_quality = 2;
+static long long g_transport_compression_threshold = 10 * 1024;
+static long long g_storage_compression_threshold = 1 * 1024;
 
 typedef enum {
 	ENCODE_PAYLOAD_OK = 0,
@@ -15,8 +17,8 @@ typedef enum {
 	ENCODE_PAYLOAD_ERR_BROTLI_FAILED,
 } EncodePayloadStatus;
 
-static EncodePayloadStatus EncodePayload(const uint8_t* input, size_t input_len, uint8_t** encoded_out, size_t* encoded_len_out) {
-	if (input_len < (size_t)g_compression_threshold) {
+static EncodePayloadStatus EncodePayload(const uint8_t* input, size_t input_len, long long brotli_quality, long long compression_threshold, uint8_t** encoded_out, size_t* encoded_len_out) {
+	if (input_len < (size_t) compression_threshold) {
 		size_t encoded_len = input_len + 1;
 		uint8_t* encoded = RedisModule_Alloc(encoded_len);
 		encoded[0] = 0x00;
@@ -37,7 +39,7 @@ static EncodePayloadStatus EncodePayload(const uint8_t* input, size_t input_len,
 	size_t compressed_len = max_compressed_len;
 
 	BROTLI_BOOL ok = BrotliEncoderCompress(
-		(int)g_brotli_quality,
+		(int) brotli_quality,
 		BROTLI_DEFAULT_WINDOW,
 		BROTLI_MODE_TEXT,
 		input_len,
@@ -97,31 +99,59 @@ static int ValidateCompressArguments(RedisModuleCtx* ctx, RedisModuleString** ar
 	return REDISMODULE_OK;
 }
 
-static long long GetCompressionLevelConfig(const char* name, void* privdata) {
+static long long GetTransportCompressionLevelConfig(const char* name, void* privdata) {
 	REDISMODULE_NOT_USED(name);
 	REDISMODULE_NOT_USED(privdata);
-	return g_brotli_quality;
+	return g_transport_brotli_quality;
 }
 
-static int SetCompressionLevelConfig(const char* name, long long value, void* privdata, RedisModuleString** err) {
+static int SetTransportCompressionLevelConfig(const char* name, long long value, void* privdata, RedisModuleString** err) {
 	REDISMODULE_NOT_USED(name);
 	REDISMODULE_NOT_USED(privdata);
 	REDISMODULE_NOT_USED(err);
-	g_brotli_quality = value;
+	g_transport_brotli_quality = value;
 	return REDISMODULE_OK;
 }
 
-static long long GetCompressionThresholdConfig(const char* name, void* privdata) {
+static long long GetStorageCompressionLevelConfig(const char* name, void* privdata) {
 	REDISMODULE_NOT_USED(name);
 	REDISMODULE_NOT_USED(privdata);
-	return g_compression_threshold;
+	return g_storage_brotli_quality;
 }
 
-static int SetCompressionThresholdConfig(const char* name, long long value, void* privdata, RedisModuleString** err) {
+static int SetStorageCompressionLevelConfig(const char* name, long long value, void* privdata, RedisModuleString** err) {
 	REDISMODULE_NOT_USED(name);
 	REDISMODULE_NOT_USED(privdata);
 	REDISMODULE_NOT_USED(err);
-	g_compression_threshold = value;
+	g_storage_brotli_quality = value;
+	return REDISMODULE_OK;
+}
+
+static long long GetTransportCompressionThresholdConfig(const char* name, void* privdata) {
+	REDISMODULE_NOT_USED(name);
+	REDISMODULE_NOT_USED(privdata);
+	return g_transport_compression_threshold;
+}
+
+static int SetTransportCompressionThresholdConfig(const char* name, long long value, void* privdata, RedisModuleString** err) {
+	REDISMODULE_NOT_USED(name);
+	REDISMODULE_NOT_USED(privdata);
+	REDISMODULE_NOT_USED(err);
+	g_transport_compression_threshold = value;
+	return REDISMODULE_OK;
+}
+
+static long long GetStorageCompressionThresholdConfig(const char* name, void* privdata) {
+	REDISMODULE_NOT_USED(name);
+	REDISMODULE_NOT_USED(privdata);
+	return g_storage_compression_threshold;
+}
+
+static int SetStorageCompressionThresholdConfig(const char* name, long long value, void* privdata, RedisModuleString** err) {
+	REDISMODULE_NOT_USED(name);
+	REDISMODULE_NOT_USED(privdata);
+	REDISMODULE_NOT_USED(err);
+	g_storage_compression_threshold = value;
 	return REDISMODULE_OK;
 }
 
@@ -137,7 +167,7 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 	if (key_type == REDISMODULE_KEYTYPE_STRING) {
 		size_t input_len = 0;
 		const char* input = RedisModule_StringDMA(key, &input_len, REDISMODULE_READ);
-		if (input != NULL && IsCompressedPayload((const uint8_t*)input, input_len)) {
+		if (input != NULL && IsCompressedPayload((const uint8_t*) input, input_len)) {
 			if (argc != 2) {
 				return RedisModule_ReplyWithError(ctx, "ERR path and formatting arguments are not supported for stored compressed values");
 			}
@@ -171,15 +201,15 @@ static int CompressedJsonGetCommand(RedisModuleCtx* ctx, RedisModuleString** arg
 	}
 
 	size_t input_len = 0;
-	const uint8_t* input = (const uint8_t*)RedisModule_CallReplyStringPtr(json_reply, &input_len);
+	const uint8_t* input = (const uint8_t*) RedisModule_CallReplyStringPtr(json_reply, &input_len);
 	uint8_t* encoded = NULL;
 	size_t encoded_len = 0;
-	EncodePayloadStatus encode_status = EncodePayload(input, input_len, &encoded, &encoded_len);
+	EncodePayloadStatus encode_status = EncodePayload(input, input_len, g_transport_brotli_quality, g_transport_compression_threshold, &encoded, &encoded_len);
 	if (encode_status != ENCODE_PAYLOAD_OK) {
 		return ReplyWithEncodePayloadError(ctx, encode_status, input_len);
 	}
 
-	RedisModule_ReplyWithStringBuffer(ctx, (const char*)encoded, encoded_len);
+	RedisModule_ReplyWithStringBuffer(ctx, (const char*) encoded, encoded_len);
 	RedisModule_Free(encoded);
 	return REDISMODULE_OK;
 }
@@ -206,7 +236,7 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 	if (key_type == REDISMODULE_KEYTYPE_STRING) {
 		size_t input_len = 0;
 		const char* input = RedisModule_StringDMA(key, &input_len, REDISMODULE_READ);
-		if (input != NULL && IsCompressedPayload((const uint8_t*)input, input_len)) {
+		if (input != NULL && IsCompressedPayload((const uint8_t*) input, input_len)) {
 			RedisModule_ReplyWithSimpleString(ctx, "OK");
 			return REDISMODULE_OK;
 		}
@@ -235,17 +265,17 @@ static int CompressedJsonCompressCommand(RedisModuleCtx* ctx, RedisModuleString*
 	}
 
 	size_t input_len = 0;
-	const uint8_t* input = (const uint8_t*)RedisModule_CallReplyStringPtr(json_reply, &input_len);
+	const uint8_t* input = (const uint8_t*) RedisModule_CallReplyStringPtr(json_reply, &input_len);
 	uint8_t* encoded = NULL;
 	size_t encoded_len = 0;
-	EncodePayloadStatus encode_status = EncodePayload(input, input_len, &encoded, &encoded_len);
+	EncodePayloadStatus encode_status = EncodePayload(input, input_len, g_storage_brotli_quality, g_storage_compression_threshold, &encoded, &encoded_len);
 
 	if (encode_status != ENCODE_PAYLOAD_OK) {
 		return ReplyWithEncodePayloadError(ctx, encode_status, input_len);
 	}
 
 	key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-	RedisModuleString* value = RedisModule_CreateString(ctx, (const char*)encoded, encoded_len);
+	RedisModuleString* value = RedisModule_CreateString(ctx, (const char*) encoded, encoded_len);
 	RedisModule_Free(encoded);
 
 	if (RedisModule_StringSet(key, value) == REDISMODULE_ERR) {
@@ -271,13 +301,13 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) 
 
 	if (RedisModule_RegisterNumericConfig(
 		ctx,
-		"level",
+		"transport-level",
 		1,
 		REDISMODULE_CONFIG_DEFAULT,
 		0,
 		11,
-		GetCompressionLevelConfig,
-		SetCompressionLevelConfig,
+		GetTransportCompressionLevelConfig,
+		SetTransportCompressionLevelConfig,
 		NULL,
 		NULL) == REDISMODULE_ERR) {
 		return REDISMODULE_ERR;
@@ -285,13 +315,41 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx, RedisModuleString** argv, int argc) 
 
 	if (RedisModule_RegisterNumericConfig(
 		ctx,
-		"threshold-bytes",
+		"storage-level",
+		2,
+		REDISMODULE_CONFIG_DEFAULT,
+		0,
+		11,
+		GetStorageCompressionLevelConfig,
+		SetStorageCompressionLevelConfig,
+		NULL,
+		NULL) == REDISMODULE_ERR) {
+		return REDISMODULE_ERR;
+	}
+
+	if (RedisModule_RegisterNumericConfig(
+		ctx,
+		"transport-threshold-bytes",
 		10 * 1024,
 		REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_MEMORY,
 		0,
 		LLONG_MAX,
-		GetCompressionThresholdConfig,
-		SetCompressionThresholdConfig,
+		GetTransportCompressionThresholdConfig,
+		SetTransportCompressionThresholdConfig,
+		NULL,
+		NULL) == REDISMODULE_ERR) {
+		return REDISMODULE_ERR;
+	}
+
+	if (RedisModule_RegisterNumericConfig(
+		ctx,
+		"storage-threshold-bytes",
+		1 * 1024,
+		REDISMODULE_CONFIG_DEFAULT | REDISMODULE_CONFIG_MEMORY,
+		0,
+		LLONG_MAX,
+		GetStorageCompressionThresholdConfig,
+		SetStorageCompressionThresholdConfig,
 		NULL,
 		NULL) == REDISMODULE_ERR) {
 		return REDISMODULE_ERR;

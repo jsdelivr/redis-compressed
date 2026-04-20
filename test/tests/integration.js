@@ -144,7 +144,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('small JSON replies are returned uncompressed with a 0x00 prefix', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -164,7 +164,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('large JSON replies are returned compressed with a 0x01 prefix', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '1' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -189,7 +189,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('JSON.GET formatting options are forwarded unchanged', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -210,7 +210,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('JSON.GET formatting options are forwarded unchanged for compressed replies', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '1' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -231,7 +231,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('JSON.GET path arguments are forwarded unchanged', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -249,7 +249,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('JSON.GET path arguments are forwarded unchanged for compressed replies', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '1' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -279,7 +279,7 @@ describe('COMPRESSED.JSON.GET', () => {
 
 	test('stored compressed values reject JSON.GET path and formatting arguments', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '1' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -337,7 +337,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 
 	test('compress rewrites a small JSON document into an uncompressed flagged blob', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -345,9 +345,6 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 			cliChecked([ 'JSON.SET', 'compress-small-doc', '$', '{"message":"hello"}' ]).stdout.trim(),
 			'OK',
 		);
-
-		const before = cliBuffer([ 'COMPRESSED.JSON.GET', 'compress-small-doc' ]);
-		assertTransportPrefix(before, '00');
 
 		assert.equal(
 			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'compress-small-doc' ]).stdout.trim(),
@@ -358,7 +355,6 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		assert.equal(typeReply, 'string');
 
 		const stored = cliBuffer([ 'GET', 'compress-small-doc' ]);
-		assert.deepEqual(stored, before);
 		assertTransportPrefix(stored, '00');
 		assert.equal(decodeCompressedJsonReply(stored), '{"message":"hello"}');
 		assertStringGetMatchesCompressedJsonGet('compress-small-doc');
@@ -372,7 +368,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 
 	test('compress rewrites a large JSON document into a compressed flagged blob', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '1' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -384,9 +380,6 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 			'OK',
 		);
 
-		const before = cliBuffer([ 'COMPRESSED.JSON.GET', 'compress-large-doc' ]);
-		assertTransportPrefix(before, '01');
-
 		assert.equal(
 			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'compress-large-doc' ]).stdout.trim(),
 			'OK',
@@ -396,7 +389,6 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		assert.equal(typeReply, 'string');
 
 		const stored = cliBuffer([ 'GET', 'compress-large-doc' ]);
-		assert.deepEqual(stored, before);
 		assertTransportPrefix(stored, '01');
 		assert.equal(decodeCompressedJsonReply(stored), largeJson);
 		assertStringGetMatchesCompressedJsonGet('compress-large-doc');
@@ -404,7 +396,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 
 	test('compress forwards JSON.GET formatting options before storing', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -434,7 +426,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 
 	test('compress accepts formatting keywords regardless of case', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -487,7 +479,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 
 	test('compress is idempotent for keys already stored as compressed blobs', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '1' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '1' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -517,7 +509,7 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 
 	test('compress preserves an existing key expiry', () => {
 		assert.equal(
-			cliChecked([ 'CONFIG', 'SET', 'compressed.threshold-bytes', '4096' ]).stdout.trim(),
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '4096' ]).stdout.trim(),
 			'OK',
 		);
 
@@ -542,5 +534,34 @@ describe('COMPRESSED.JSON.COMPRESS', () => {
 		const ttlAfter = Number.parseInt(cliChecked([ 'PTTL', 'compress-expiring-doc' ]).stdout.trim(), 10);
 		assert.ok(ttlAfter > 0, `expected positive ttl after compression, got ${ttlAfter}`);
 		assert.ok(ttlAfter <= ttlBefore, `ttl should not increase after compression\nbefore: ${ttlBefore}\nafter: ${ttlAfter}`);
+	});
+
+	test('transport and storage thresholds are configured independently', () => {
+		assert.equal(
+			cliChecked([ 'CONFIG', 'SET', 'compressed.transport-threshold-bytes', '1' ]).stdout.trim(),
+			'OK',
+		);
+		assert.equal(
+			cliChecked([ 'CONFIG', 'SET', 'compressed.storage-threshold-bytes', '4096' ]).stdout.trim(),
+			'OK',
+		);
+
+		const mediumJson = JSON.stringify({ payload: 'x'.repeat(512) });
+		assert.equal(
+			cliChecked([ 'JSON.SET', 'threshold-split-doc', '$', mediumJson ]).stdout.trim(),
+			'OK',
+		);
+
+		const transportReply = cliBuffer([ 'COMPRESSED.JSON.GET', 'threshold-split-doc' ]);
+		assertTransportPrefix(transportReply, '01');
+
+		assert.equal(
+			cliChecked([ 'COMPRESSED.JSON.COMPRESS', 'threshold-split-doc' ]).stdout.trim(),
+			'OK',
+		);
+
+		const storedReply = cliBuffer([ 'GET', 'threshold-split-doc' ]);
+		assertTransportPrefix(storedReply, '00');
+		assert.equal(decodeCompressedJsonReply(storedReply), mediumJson);
 	});
 });
